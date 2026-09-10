@@ -220,8 +220,8 @@ to get a different one.
 
 | Writer | What you get |
 | :--- | :--- |
-| **rule tables** *(default)* | Instant, offline, nothing to download. Imagery is matched from built-in keyword lists and the framing varies by card number. Reliable, but a song about a subject the tables never anticipated falls back to generic shots, and two songs in the same genre come out looking alike. |
-| **local LLM** | A small instruct model reads the whole song **once** &mdash; lyrics, timeline and the measured audio analysis &mdash; decides who it is about, where it happens and what recurs, then writes every card and motion prompt against that one reading. Imagery comes from *this* song rather than from a list, and the deck stays coherent because one pass produced all of it. |
+| **local LLM** *(what the shipped workflows use)* | A small instruct model reads the whole song **once** &mdash; lyrics, timeline, and the measured audio analysis including tempo, key, energy, percussive ratio, arousal/valence and the genre's implied visual world &mdash; then decides a **visual style from how the song sounds** (a cinematography school, film stock or art movement), who it is about, where it happens and what recurs, and writes every card and motion prompt against that one reading. Imagery comes from *this* song rather than from a list, the style reaches every card so the deck reads as one film, and the framing is varied deliberately from card to card. |
+| **rule tables** | Instant, offline, nothing to download, and the automatic fallback if the model cannot load. Imagery is matched from built-in keyword lists, but the music still drives the genre world, the wardrobe, the light arc and the story beats. Reliable; less specific to an unusual song than the LLM. |
 
 The LLM writer needs an instruct checkpoint: put a folder under `ComfyUI/models/LLM`
 or type a Hugging Face repo id into `llm_model`. A local folder always wins, so an
@@ -264,7 +264,7 @@ Its `subject` / `setting` / `visual_style` / `motion_style` fields are
 | :--- | :--- |
 | **Creative** *(default)* | Reads the whole song first &mdash; dominant mood, recurring imagery &mdash; then each segment mixes its own imagery with an idea borrowed from another verse, plus a cinematic idea (colour shifts, particles, surreal touches, travelling light). Feels like a music video. |
 | **Lyrics-focused** | Closely follows what is sung in that segment: its actions, objects, emotions, places. |
-| **Abstract** | Paints the mood rather than the words &mdash; colour, form and motion, the subject as a presence rather than a portrait. |
+| **Abstract** | A real abstract PAINTING, not a blur: the music chooses one art movement &mdash; analytic cubism (Picasso, Braque) for fractured driving rhythm, Kandinsky for kinetic brightness, Rothko colour-fields for slow ache, Pollock action painting for aggression, Mir&oacute; for pop, Malevich suprematism, Klee, Frankenthaler &mdash; and the whole deck stays inside that movement, each card a different composition within it. Loud segments render dense and saturated, quiet ones sparse. Change `llm_seed` to get a different movement from the same look's candidates. No people, no places, no photographic realism. |
 
 Camera movement, dynamic lighting, and song structure dynamics are driven by **adaptive NLP & parametric audio signal analysis**:
 - **Adaptive NLP Lyric Analysis**: Dynamically extracts action verbs, visual nouns, sensory descriptors, and emotional tone for ANY lyric line without relying on rigid static word tables.
@@ -314,19 +314,37 @@ segment**. It renders `segments_per_queue` unfinished segments per execution (de
 saves each clip immediately, and skips saved clips next time. `MiniMaxSegmentsRender`
 uses the same batching and resume behavior with the MiniMax H3 graph.
 
-**Frame continuity:** consecutive segments *share a card*. Segment 1 renders
-A1&rarr;A2, segment 2 renders **A2**&rarr;A3, segment 3 renders **A3**&rarr;A4. The same
-image asset is reused &mdash; never regenerated &mdash; so every cut lands on a common frame.
+**Seamless chaining &mdash; `seamless_chain` (on by default).** Cards alone are not enough
+to make segments join. A clip is only *pulled toward* its last card (guide strength 0.7,
+never a pin) and the stitcher then trims the final frames, so a segment that starts
+exactly **on** its card jumps at every boundary. With chaining on, **segment i+1 starts
+from the real frame segment i's clip ends on**, while its card stays the target the clip
+moves toward:
+
+```
+seg1: card0 ──────────► card1        seg2 starts on seg1's ACTUAL last frame ──► card2
+                    └── handoff ─────┘                                 └── handoff ──► ...
+```
+
+The handoff frame is saved as `handoff_NNN.png` beside each clip, so chaining survives
+the batching &mdash; segment 9 rendered in a later queue still begins on segment 8's real
+final frame. It is also the last frame that *survives the stitcher's trim*, so continuity
+holds in the final cut, not just in the raw clips. Segment 1 starts on card 0; turn the
+switch off to go back to card-to-card starts.
+
+> Clips rendered before this feature have no handoff frames, so a part-rendered song keeps
+> its old boundaries. For a fully seamless result, delete the run's `clips/` folder (or
+> start a new run) and render step 3 again.
 
 While it runs you see, per segment: **NOW RENDERING** (which segment, its timecode, its
-cards, its seed, the **full motion prompt sent to LTX**), the two frames being fed in, and
-**CLIP SAVED** as each clip lands. Each clip is written the moment it finishes, so an
-interrupted queue resumes for free.
+cards, its seed, the **full motion prompt sent to LTX**), the two frames being fed in, a
+live **VRAM / commit / RAM** reading, and **CLIP SAVED** as each clip lands. All of the
+queue's first/last frames are loaded and previewed *before* the first frame is sampled,
+so you can confirm the pairs while stopping still costs nothing.
 
-**If LTX transitions cross-fade instead of moving:** lower `end_guide_strength` (default
-`0.7`). It controls how hard each clip is pulled onto the next card &mdash; nearer 1.0
-dissolves, lower gives real motion. The first frame is always pinned at 0.7 so every clip
-starts exactly on its card.
+**`end_guide_strength`** (default `0.7`) matches the official LTX 2.5 first/last-frame
+workflow, which pins **both** ends at 0.7. Lowering it lets a clip drift away from the card
+it should land on; raise toward 1.0 only if you want a dissolve between cards.
 
 ### 8. Final cut
 
@@ -387,7 +405,8 @@ All nodes live under **`Geekatplay/VideoClipMaker`**, numbered in pipeline order
 | **`StageMemoryCleaner`** | Unloads models from VRAM between stages. |
 | **`LTXSegmentsRender`** | Renders LTX 2.5 segments in resumable batches and reports the live feed. |
 | **`MiniMaxSegmentsRender`** | Renders MiniMax H3 segments with the same batching and resume behavior. |
-| **`SegmentVideoSaver`** | Writes each clip to `<run>/clips/` under its segment number. |
+| **`SegmentTable`** | Every segment in one table on the canvas: its first and last card as images, the motion prompt, and the finished clip playable in the same row. Queue it any time &mdash; it only reads the run folder. |
+| **`SegmentVideoSaver`** | Writes each clip to `<run>/clips/` under its segment number, plus the handoff frame the next segment starts from. |
 | **`VideoSegmentStitcher`** | Joins the clips, slices the song per segment, muxes the final cut. |
 | **`KeyframePairBatcher`** | *Utility.* Manual per-segment mode. |
 | **`DynamicCardBatchPrompter`** | *Utility.* One card prompt per queue. |
@@ -435,6 +454,10 @@ ComfyUI-Music-to-Video/
 ├── install.bat                 Windows installer (portable-ComfyUI aware)
 ├── install.sh                  Linux / macOS installer
 ├── web/js/                      status, review, and segment-progress panels
+├── tools/
+│   ├── check_workflows.py      widget-slot guard - run after any INPUT_TYPES change
+│   └── audit.py                85 structural checks (render wiring, guides, seamless
+│                               chaining, resume, boards, prompt quality)
 └── example_workflows/
     ├── music_video_ALL_IN_ONE.json                  start here
     ├── music_video_MINIMAX_AUDIO_TO_LTX_VIDEO.json  same, song generated not loaded
@@ -444,6 +467,26 @@ ComfyUI-Music-to-Video/
     ├── part3_cards_to_video.json
     └── audio_minimax_music_3.json                   text-to-music on its own
 ```
+
+---
+
+## Developing this pack
+
+ComfyUI matches a saved workflow's `widgets_values` to a node's widgets **by position,
+not by name**. Insert a widget anywhere but the end of `INPUT_TYPES` and every value after
+it lands on the wrong input &mdash; the JSON stays valid and the graph still opens, so it
+only fails when someone presses Queue. Two gates catch that, and everything else:
+
+```bash
+python tools/check_workflows.py   # widget slots + combo values, all shipped workflows
+python tools/audit.py             # 85 structural checks, exit code gates a release
+```
+
+`audit.py` covers node registration, the LTX and MiniMax expansions (first/last frame
+flow, both guides at 0.7, one-pass text encoding, seamless chaining, render order,
+resume), the segment board against a real run, and the prompt engine (approach
+distinctness, abstract-as-art, music-driven visuals, no hardcoded personas). Run both
+after any change to a node's inputs.
 
 ---
 

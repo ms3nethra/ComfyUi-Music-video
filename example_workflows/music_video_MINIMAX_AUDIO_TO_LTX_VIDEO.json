@@ -1,8 +1,8 @@
 {
   "id": "55555555-5555-5555-8555-555555555555",
   "revision": 1,
-  "last_node_id": 33,
-  "last_link_id": 55,
+  "last_node_id": 34,
+  "last_link_id": 58,
   "nodes": [
     {
       "id": 1,
@@ -246,7 +246,8 @@
           "links": [
             7,
             41,
-            51
+            51,
+            58
           ]
         },
         {
@@ -377,7 +378,8 @@
             19,
             32,
             43,
-            50
+            50,
+            57
           ]
         },
         {
@@ -397,7 +399,8 @@
             34,
             42,
             49,
-            55
+            55,
+            56
           ]
         }
       ],
@@ -1328,6 +1331,7 @@
         999,
         18,
         4,
+        true,
         true
       ],
       "title": "9. RENDER ALL SEGMENTS  (4 per queue, resumable)",
@@ -1510,7 +1514,7 @@
         "previewExposures": []
       },
       "widgets_values": [
-        "Global Metadata: Lo-fi hip-hop, chillhop. 78 BPM, D flat major, major scale with jazzy extensions. Laid-back and dreamy throughout, a gentle warm drift with a subtle late-night glow that deepens in the middle and dissolves softly at the end. Studying, raining-outside, headphones-on late-night listening. Bedroom production: muddy warm texture, heavy vinyl crackle, tape hiss and wow-flutter pitch wobble, low-passed dusty mix, soft-clipped drums, everything slightly detuned and cozy.\n\nVocal Details: Soft androgynous vocal, hushed half-sung half-spoken delivery, sitting low in the mix like another instrument, lazy behind-the-beat phrasing, gentle breathy timbre. Sparse murmured double-tracked harmonies, occasional wordless \"mmm\" and \"ooh\" hums drenched in tape delay and warm spring reverb. Long stretches with no vocals at all.\n\nArrangement: Dusty boom-bap drums with a soft thumping kick, cracked snare with lazy swing, brushed hi-hats, low round sub bass. Warm Rhodes piano chords with slow chorus wobble as the harmonic bed, mellow jazzy guitar licks answering the vocal lines, constant vinyl crackle as texture. Intro: rain and vinyl noise, solo Rhodes chords fading in, drums slipping in halfway. Verses: minimal — drums, bass, Rhodes, soft guitar fills between lines. Instrumental sections: guitar and Rhodes trade relaxed jazzy phrases over the beat, occasional muted trumpet ghost notes far in the background. Bridge: drums drop away to rain, crackle, and floating detuned Rhodes, then the beat eases back in. Outro: elements fade one by one until only vinyl crackle and a last unresolved Rhodes chord remain.",
+        "Global Metadata: Lo-fi hip-hop, chillhop. 78 BPM, D flat major, major scale with jazzy extensions. Laid-back and dreamy throughout, a gentle warm drift with a subtle late-night glow that deepens in the middle and dissolves softly at the end. Studying, raining-outside, headphones-on late-night listening. Bedroom production: muddy warm texture, heavy vinyl crackle, tape hiss and wow-flutter pitch wobble, low-passed dusty mix, soft-clipped drums, everything slightly detuned and cozy.\n\nVocal Details: Soft androgynous vocal, hushed half-sung half-spoken delivery, sitting low in the mix like another instrument, lazy behind-the-beat phrasing, gentle breathy timbre. Sparse murmured double-tracked harmonies, occasional wordless \"mmm\" and \"ooh\" hums drenched in tape delay and warm spring reverb. Long stretches with no vocals at all.\n\nArrangement: Dusty boom-bap drums with a soft thumping kick, cracked snare with lazy swing, brushed hi-hats, low round sub bass. Warm Rhodes piano chords with slow chorus wobble as the harmonic bed, mellow jazzy guitar licks answering the vocal lines, constant vinyl crackle as texture. Intro: rain and vinyl noise, solo Rhodes chords fading in, drums slipping in halfway. Verses: minimal \u2014 drums, bass, Rhodes, soft guitar fills between lines. Instrumental sections: guitar and Rhodes trade relaxed jazzy phrases over the beat, occasional muted trumpet ghost notes far in the background. Bridge: drums drop away to rain, crackle, and floating detuned Rhodes, then the beat eases back in. Outro: elements fade one by one until only vinyl crackle and a last unresolved Rhodes chord remain.",
         "[Intro]\nMmm...\n(rain on the window)\nOoh...\n\n[Verse]\nMidnight and the canvas glows\nDragging little wires where the current flows\nType a quiet dream, let the sampler drift\nNoise into a picture, like the fog just lifts\nTwenty slow steps, I'm in no hurry now\nLatents turning colors and I don't know how\nEvery render's like a polaroid I found\nSoft focus memories, no sound\n\n[Instrumental]\n\n[Verse]\nQueue another frame, let the motion breathe\nPictures start to move like the falling leaves\nVideo drifting by at twenty-four\nLittle animations on my bedroom floor\nSeed after seed like the rain outside\nSome of them are keepers, some I let slide\nSave the ones that feel like a Sunday slow\nNode to node to node... and off we go\n\n[Chorus]\nMmm... let it render on\n(take your time, take your time)\nOoh... by the morning it'll all be done\n(one more queue, one more try)\n\n[Instrumental]\n\n[Bridge]\nRain keeps drawing pictures on the glass...\nMy machine keeps dreaming...\nNeither of us fast...\n\n[Chorus]\nMmm... let it render on\n(take your time, take your time)\nOoh... by the morning it'll all be done\n(one more queue, one more try)\n\n[Instrumental]\n\n[Outro]\nMmm...\n(node to node)\nOoh... goodnight",
         60,
         197122968890040,
@@ -1626,6 +1630,63 @@
       },
       "widgets_values": [],
       "title": "REFERENCE PROMPTS - which JSON + the exact prompt for every reference"
+    },
+    {
+      "id": 34,
+      "type": "SegmentTable",
+      "pos": [
+        1680,
+        1540
+      ],
+      "size": [
+        560,
+        460
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "storyboard_data",
+          "type": "STRING",
+          "link": 56
+        },
+        {
+          "name": "run_dir",
+          "type": "STRING",
+          "link": 57
+        },
+        {
+          "name": "animation_prompts",
+          "type": "STRING",
+          "link": 58
+        }
+      ],
+      "outputs": [
+        {
+          "name": "TABLE",
+          "type": "STRING",
+          "links": []
+        },
+        {
+          "name": "RENDERED",
+          "type": "INT",
+          "links": []
+        },
+        {
+          "name": "TOTAL",
+          "type": "INT",
+          "links": []
+        }
+      ],
+      "title": "3d. SEGMENT TABLE - all segments, frames, clips",
+      "properties": {
+        "Node name for S&R": "SegmentTable"
+      },
+      "widgets_values": [
+        false,
+        24
+      ]
     }
   ],
   "links": [
@@ -2067,6 +2128,30 @@
       3,
       15,
       4,
+      "STRING"
+    ],
+    [
+      56,
+      9,
+      3,
+      34,
+      0,
+      "STRING"
+    ],
+    [
+      57,
+      9,
+      1,
+      34,
+      1,
+      "STRING"
+    ],
+    [
+      58,
+      7,
+      1,
+      34,
+      2,
       "STRING"
     ]
   ],

@@ -2710,6 +2710,9 @@ class StoryboardPromptGenerator(ForceRerunMixin):
             lyric_key = zlib.crc32(" ".join(s.get("lyrics", "") for s in segments)
                                    .encode("utf-8"))
             rng = random.Random(int(llm_seed or 0) ^ lyric_key)
+            # The whole deck paints inside ONE art movement, picked by the
+            # sound (and reshuffled by llm_seed like the story is).
+            theme["art_movement"] = _choose_art_movement(music, rng)
             if concert:
                 story = _compose_concert_story(segments, music, subject, setting, rng)
             else:
@@ -3554,11 +3557,15 @@ def _build_motion_prompt(idx, seg, who, setting, motion_style, video_style,
         # them would pull the render back toward a literal shot.
         a_mood = _TONE_TO_MOOD.get((music or {}).get("emotional_tone", ""), "") or mood
         colour, form, motion = ABSTRACT_MOODS.get(a_mood, ABSTRACT_MOODS[""])
-        parts.append(f"An abstract, painterly interpretation - no people, no faces, "
-                     f"no recognisable place: {colour}; {form}.")
-        parts.append(motion.capitalize() + ".")
+        m_name, m_forms, m_texture = (theme or {}).get("art_movement") or _CUBISM
+        parts.append(f"An abstract painting in the style of {m_name}, in motion - "
+                     f"no people, no faces, no recognisable place.")
+        parts.append(f"{m_forms[0].upper() + m_forms[1:]}; {colour}.")
+        parts.append(motion.capitalize() + " - the painting's own forms shifting, "
+                     "growing and dissolving, the brushwork itself alive.")
         if imagery:
-            parts.append("Echoes of " + imagery[0] + " surface and dissolve.")
+            parts.append("Echoes of " + imagery[0] + " surface inside the forms and dissolve.")
+        parts.append(f"{m_texture[0].upper() + m_texture[1:]}.")
     elif creative:
         if is_no_people:
             parts.append(f"In {where}, {motion_action}.")
@@ -3825,40 +3832,174 @@ _TONE_TO_MOOD = {
 }
 
 
-def _abstract_card_prompt(index, seg, mood, music, visual_style, global_prompt, is_finale):
-    """The Abstract approach: NO subject, NO location, NO literal scene. Colour,
-    form and motion energy stand in for the music; a lyric may only surface as
-    an echo. This is a different kind of image entirely, not the literal card
-    with an 'abstract' sticker on it."""
-    colour, form, motion = ABSTRACT_MOODS.get(mood, ABSTRACT_MOODS[""])
+# ---------------------------------------------------------------------------
+# Abstract as ART, not as a blur. "Abstract" prompts built only from colour
+# adjectives all render as the same vague gradient soup; a century of abstract
+# painting exists precisely because each movement is a DIFFERENT visual system.
+# The music picks which painter's eyes the song is seen through, the whole deck
+# stays inside that one movement (a video that switches from Picasso to Rothko
+# per card reads as noise), and each card varies the composition within it.
+# ---------------------------------------------------------------------------
+ART_MOVEMENTS = {
+    "dark_electronic": [
+        ("futurism, in the manner of Boccioni and Balla",
+         "machine rhythm rendered as force-lines - a subject shattered into "
+         "sequential positions, speed made visible, metallic sheens colliding",
+         "hard-edged oil on canvas, dynamic diagonal energy"),
+        ("constructivism, in the manner of El Lissitzky and Rodchenko",
+         "severe geometric masses - wedges, bars and circles in tension, "
+         "one red diagonal driving through black architecture of shapes",
+         "flat poster-crisp planes, engineered precision"),
+        ("Kandinsky's dynamic abstraction",
+         "colliding circles, arcs and lances of colour ringing against each "
+         "other like struck instruments, black lines whipping through",
+         "vibrating colour on white, orchestral density"),
+    ],
+    "driving_rock": [
+        ("action painting, in the manner of Jackson Pollock",
+         "slashed, dripped and flung paint - a dense web of trajectories, "
+         "every strand recording a violent gesture",
+         "enamel skeins over raw canvas, layered impasto chaos"),
+        ("abstract expressionism, in the manner of de Kooning and Kline",
+         "huge black strokes fighting white space, torn edges, a figure "
+         "almost surfacing from the violence of the brushwork",
+         "housepaint-wide strokes, scraped and reworked surface"),
+    ],
+    "upbeat_pop": [
+        ("playful biomorphic abstraction, in the manner of Joan Miró",
+         "buoyant floating creatures of pure shape - dots, stars, wiry lines "
+         "and bold amoebic colours dancing on a bright field",
+         "flat saturated gouache, childlike precision"),
+        ("cut-out abstraction, in the manner of Matisse's late works",
+         "great scissored shapes of pure colour leaping across the frame, "
+         "positive and negative space trading places",
+         "paper-flat colour, razor edges, joyous scale"),
+    ],
+    "romantic_ballad": [
+        ("lyrical colour-field, in the manner of Rothko",
+         "vast soft-edged rectangles of breathing colour hovering over one "
+         "another, their borders dissolving where they meet",
+         "thin luminous oil veils, glowing from within"),
+        ("late-Monet abstraction",
+         "the world dissolved into strokes of light on water - colour "
+         "sensation with the subject melted away",
+         "broken impressionist touches fused into pure atmosphere"),
+    ],
+    "melancholic": [
+        ("dark colour-field, in the manner of Rothko's late works",
+         "heavy maroon and black fields pressing down on a thin band of "
+         "failing light, edges swallowed by darkness",
+         "matte light-absorbing layers, immense quiet"),
+        ("minimalist ink abstraction",
+         "one exhausted brushstroke crossing vast empty paper, grey wash "
+         "bleeding at its edges",
+         "sumi ink on paper, emptiness as the subject"),
+    ],
+    "acoustic_intimate": [
+        ("quiet geometric poetry, in the manner of Paul Klee",
+         "small trembling squares and ladders of muted colour, hand-drawn "
+         "lines wandering like a tune picked out on strings",
+         "watercolour and pencil on rough paper, intimate scale"),
+        ("soak-stain abstraction, in the manner of Helen Frankenthaler",
+         "thinned colour poured and soaked into raw canvas, organic pools "
+         "finding their own soft boundaries",
+         "translucent stained washes, unforced and open"),
+    ],
+    "ambient_dreamy": [
+        ("colour-field abstraction, in the manner of Rothko and Turner's last skies",
+         "enormous veils of pale colour dissolving into one another, no "
+         "horizon, light with nothing left to illuminate",
+         "misted glazes, edges lost entirely"),
+    ],
+    "orchestral_classical": [
+        ("orchestral abstraction, in the manner of Kandinsky's Compositions",
+         "a full symphony as form - surging masses of colour with counter-"
+         "melodies of line, crescendos stacked into visual chords",
+         "grand-scale oil, dense contrapuntal structure"),
+    ],
+    "cinematic_neutral": [
+        ("analytic cubism, in the manner of Picasso and Braque",
+         "the subject fractured into overlapping crystalline planes seen "
+         "from many angles at once, faceted greys and ochres interlocking",
+         "muted palette, chiselled facets, shallow shifting space"),
+        ("suprematism, in the manner of Malevich",
+         "pure geometric forms floating free of gravity on white - a black "
+         "square, tilted bars, the weight of colour alone",
+         "absolute flatness, cosmic emptiness between forms"),
+    ],
+}
+# Songs with a clear driving pulse also get cubism as a candidate everywhere -
+# Picasso's fracturing IS rhythm made visible, and it is the one the user
+# reaches for when they say "truly abstract".
+_CUBISM = ART_MOVEMENTS["cinematic_neutral"][0]
+
+_ABSTRACT_COMPOSITIONS = [
+    "composition surging up and to the right",
+    "a single dominant form at dead centre, satellites orbiting it",
+    "the frame split diagonally, two colour systems at war across the seam",
+    "forms crowding in from the edges toward an empty core",
+    "one horizon-like division low in the frame, everything above it rising",
+    "a spiral of forms winding inward",
+    "vertical fall - every element streaming downward",
+    "scattered constellation, no centre, the eye made to wander",
+]
+
+
+def _choose_art_movement(music, rng):
+    """One movement per SONG, chosen by how it sounds; the deck stays inside it."""
+    look = (music or {}).get("look", "cinematic_neutral")
+    pool = list(ART_MOVEMENTS.get(look) or ART_MOVEMENTS["cinematic_neutral"])
+    if float((music or {}).get("percussive_ratio") or 0) >= 0.3 and _CUBISM not in pool:
+        pool.append(_CUBISM)
+    return rng.choice(pool)
+
+
+def _abstract_card_prompt(index, seg, mood, music, visual_style, global_prompt,
+                          is_finale, movement=None):
+    """The Abstract approach as a real painting: the song's chosen art movement
+    (Picasso's cubism, Kandinsky, Rothko, Pollock...) applied to this moment of
+    the music. NO literal scene - the movement's own visual system carries it."""
+    name, forms, texture = movement or _CUBISM
+    colour, _form, motion = ABSTRACT_MOODS.get(mood, ABSTRACT_MOODS[""])
     palette = (music or {}).get("palette", "")
     lines = []
     lead = (global_prompt or "").strip().rstrip(".")
     if lead:
         lines.append(lead[0].upper() + lead[1:] + ".")
-    lines.append(
-        "An abstract non-representational composition - no people, no faces, "
-        "no recognisable place, no objects, no text.")
-    lines.append(f"{colour[0].upper() + colour[1:]}; {form}.")
-    if palette:
-        lines.append(f"Colour treatment: {palette}.")
+    # The per-card composition LEADS so consecutive cards open differently;
+    # the movement sentence follows, identical across the deck on purpose.
+    comp = _ABSTRACT_COMPOSITIONS[index % len(_ABSTRACT_COMPOSITIONS)]
+    lines.append(f"{comp[0].upper() + comp[1:]} - an abstract painting "
+                 f"in the style of {name}.")
+    lines.append(f"{forms[0].upper() + forms[1:]}.")
+    lines.append(f"Colour: {colour}" + (f"; {palette}." if palette else "."))
     section_type = seg.get("section_type")
     if section_type == "chorus_climax":
-        lines.append("The forms surge to peak intensity - maximum contrast, the frame full.")
+        lines.append("This is the painting at full volume - maximum density, the "
+                     "frame packed edge to edge, colour at its most saturated.")
     elif section_type == "build_up":
-        lines.append("The forms gather and rise, tension building toward the edge of the frame.")
+        lines.append("The forms gather and accelerate, tension loading toward one "
+                     "edge of the frame.")
     elif section_type in ("intro", "outro"):
-        lines.append("The forms are sparse and quiet, most of the frame breathing empty.")
+        lines.append("Sparse and quiet - a few forms, most of the frame breathing empty.")
     if is_finale:
-        lines.append("The final resolving image: the forms settle into stillness.")
-    imagery, _ = ([], "") if seg.get("lyrics") == INSTRUMENTAL else _lyric_imagery(seg.get("lyrics", ""))
-    if imagery:
-        lines.append(f"A faint echo of {imagery[index % len(imagery)]} half-forms in the shapes and dissolves.")
+        lines.append("The final resolving image: the composition settles into balance.")
+    # Bare nouns from the lyric, not the cinematographic imagery phrases -
+    # those carry camera and person wording ("into the lens", "faces almost
+    # touching") that an image model takes literally and un-abstracts the card.
+    words = ([] if seg.get("lyrics") == INSTRUMENTAL
+             else _lyric_keywords(seg.get("lyrics", ""), limit=3))
+    if words:
+        lines.append(f"Half-hidden inside the abstraction, only the idea of "
+                     f"{', '.join(words)} broken into the movement's own forms - "
+                     f"suggested, never depicted.")
     lines.append(motion[0].upper() + motion[1:] + ", frozen at its most charged instant.")
+    lines.append(f"{texture[0].upper() + texture[1:]}.")
     if (visual_style or "").strip():
         style = visual_style.strip().rstrip(".")
         lines.append(style[0].upper() + style[1:] + ".")
-    lines.append("Gestural, painterly, bold - highly detailed texture, no text, no watermark.")
+    lines.append("A museum-grade abstract artwork - no people, no faces, no text, "
+                 "no watermark, no photographic realism.")
     return " ".join(lines)
 
 
@@ -3893,10 +4034,12 @@ def _build_card_prompt(index, card_count, seg, visual_style, model_tokens, is_fi
     # has no opinion - atmosphere from the sound, content from the words.
     if abstract:
         tone_mood = _TONE_TO_MOOD.get((music or {}).get("emotional_tone", ""), "")
+        movement = theme.get("art_movement")
         prompt = _abstract_card_prompt(index, seg, tone_mood or mood, music,
-                                       visual_style, global_prompt, is_finale)
+                                       visual_style, global_prompt, is_finale,
+                                       movement=movement)
         seg["_visual_note"] = (f"{'final frame' if is_finale else f'shot {index + 1}'}: "
-                               f"abstract [{mood or 'neutral'}]")
+                               f"abstract [{(movement or _CUBISM)[0].split(',')[0]}]")
         return prompt
 
     # The story beat carries what this card actually SHOWS: the action at this
@@ -5262,7 +5405,7 @@ def _segments_cache_key(kwargs):
 
 
 def _board_rows(segments, prompts, run_dir, fps=24, deck=None, queued=(),
-                budget=None):
+                budget=None, frames_fn=None):
     """
     One row per segment for the canvas table: which two cards it animates, the
     prompt driving them, and its clip once that exists.
@@ -5295,9 +5438,11 @@ def _board_rows(segments, prompts, run_dir, fps=24, deck=None, queued=(),
             "time": (f"{_fmt_time(seg.get('start_time', 0))} -> "
                      f"{_fmt_time(seg.get('end_time', 0))}"),
             "dur": round(duration, 2),
-            # LTX wants (frames - 1) divisible by 8; shown so the table matches
-            # what the renderer will actually produce.
-            "frames": max(9, int(round(duration * fps / 8.0)) * 8 + 1),
+            # Each backend quantises clip length differently (LTX to 8n+1,
+            # MiniMax to 5+17k); the caller passes its own rule so the table
+            # matches what the renderer will actually produce.
+            "frames": (frames_fn(duration, fps) if frames_fn
+                       else max(9, int(round(duration * fps / 8.0)) * 8 + 1)),
             "cardA": a,
             "cardB": b,
             "first": _view_ref(os.path.join(cards_dir, f"card_{a:04d}.png")) if cards_dir else None,
@@ -5308,6 +5453,32 @@ def _board_rows(segments, prompts, run_dir, fps=24, deck=None, queued=(),
             "status": "done" if clip_done else ("queued" if i in queued else "pending"),
         })
     return rows
+
+
+def _handoff_path(run_dir, idx):
+    return os.path.join(run_dir, "clips", f"handoff_{int(idx):03d}.png") if run_dir else ""
+
+
+def _load_handoff(run_dir, prev_idx):
+    """
+    The exact frame the previous segment's clip ends on, saved when that clip
+    was written. Starting the next segment from THIS image instead of the
+    shared card is what makes the boundary seamless: the last-frame guide only
+    pulls a clip NEAR its card (strength 0.7, and the stitcher trims the tail),
+    so a segment that starts exactly ON the card jumps at every cut. This frame
+    is the rendered truth, so frame N of the song flows into frame N+1.
+    """
+    path = _handoff_path(run_dir, prev_idx)
+    if not path or not os.path.isfile(path):
+        return None
+    try:
+        from PIL import Image
+        with Image.open(path) as handle:
+            arr = np.asarray(handle.convert("RGB"), dtype=np.float32) / 255.0
+        return torch.from_numpy(arr)[None, ...]
+    except Exception as exc:
+        _safe_print(f"[SegmentsRender] Could not read handoff frame {path}: {exc}")
+        return None
 
 
 class SegmentTable(ForceRerunMixin):
@@ -5478,6 +5649,18 @@ class LTXSegmentsRender(ForceRerunMixin):
                                "folder, so queueing again continues the song instead of "
                                "starting over.",
                 }),
+                "seamless_chain": ("BOOLEAN", {
+                    "default": True,
+                    "label_on": "start each clip on the previous clip's real last frame",
+                    "label_off": "start each clip on its card",
+                    "tooltip": "ON: segment i+1 begins from the exact frame segment i's "
+                               "clip ends on (saved beside the clip, so it also works "
+                               "across queues), while its card stays the target the clip "
+                               "moves toward - boundaries become seamless: 1-2, 2-3, 3-4 "
+                               "flow as one take. OFF: every segment starts on its card "
+                               "image; the previous clip only ends NEAR that card, so "
+                               "each boundary shows a small jump.",
+                }),
             }
         }
 
@@ -5499,7 +5682,8 @@ class LTXSegmentsRender(ForceRerunMixin):
     def render_segments(self, force_rerun, model, clip, video_vae, audio_vae, images,
                         animation_prompts, storyboard_data, run_dir, width, height, fps,
                         seed, end_guide_strength, negative_prompt, max_segments=999,
-                        img_compression=18, segments_per_queue=4, resume=True):
+                        img_compression=18, segments_per_queue=4, resume=True,
+                        seamless_chain=True):
         from comfy_execution.graph_utils import GraphBuilder
 
         _stage_cleanup("LTXSegmentsRender")
@@ -5574,6 +5758,7 @@ class LTXSegmentsRender(ForceRerunMixin):
         # Every prompt's encode is collected here and forced to run BEFORE the
         # first segment samples - see the gather below the loop.
         positives, first_banner = [], None
+        prev_handoff, prev_i = None, None
         # `i` stays the segment's own index in the song, never its position in
         # this batch, so cards, seeds and clip numbers are identical no matter
         # how the song is split across queues.
@@ -5590,11 +5775,27 @@ class LTXSegmentsRender(ForceRerunMixin):
             if len(prompt) < raw_len:
                 trimmed_count += 1
 
-            # CONTINUITY: consecutive segments SHARE a card. Segment i ends on
-            # card i+1 and segment i+1 starts on that exact same card i+1 -
-            # a1->a2, a2->a3, a3->a4 - so every cut lands on a common frame.
+            # CONTINUITY. Cards alone are not enough: segment i's clip only
+            # ends NEAR card i+1 (the guide pulls, never pins), so starting
+            # segment i+1 ON that card jumps at every boundary. With seamless
+            # chaining the next segment starts from the previous clip's REAL
+            # final frame - in memory within this queue, from the saved
+            # handoff PNG across queues - and the card stays the target the
+            # clip moves toward: 1-2, 2-3, 3-4 flow as one take.
             start_src = images[a:a + 1]
             start_desc = f"card {a}" + (f" (shared with segment {i})" if i > 0 else "")
+            if seamless_chain and i > 0:
+                if prev_handoff is not None and prev_i == i - 1:
+                    start_src = prev_handoff.out(0)
+                    start_desc = (f"segment {i}'s actual final frame "
+                                  f"(seamless chain, card {a} as reference)")
+                else:
+                    prev_seg_idx = int(wanted[i - 1].get("segment_index", i - 1))
+                    loaded = _load_handoff(run_dir, prev_seg_idx)
+                    if loaded is not None:
+                        start_src = loaded
+                        start_desc = (f"segment {i}'s final frame from disk "
+                                      f"(seamless chain, card {a} as reference)")
 
             # The banner heads the segment's image path AND is chained behind the
             # previous segment's saver, so it fires exactly when this segment
@@ -5681,13 +5882,24 @@ class LTXSegmentsRender(ForceRerunMixin):
                                images=frames_out.out(0), audio=audio_out.out(0),
                                fps=float(fps))
 
+            # The frame the NEXT segment will start from. Not the absolute last
+            # rendered frame: the stitcher trims each clip to its segment
+            # length, so the handoff is the last frame that SURVIVES the trim -
+            # continuity holds through the final cut, not just in the raw clip.
+            handoff_idx = max(0, min(frames - 1, int(duration * fps + 1e-6) - 1))
+            handoff = graph.node("ImageFromBatch", id=f"hand{i}",
+                                 image=frames_out.out(0),
+                                 batch_index=handoff_idx, length=1)
+            prev_handoff, prev_i = handoff, i
+
             # Saved into the run under its segment number as soon as it exists.
             # Chaining each saver behind the previous one renders the song in
             # order, and makes SEGMENTS_DONE depend on every clip.
             saver_kwargs = dict(force_rerun=False, video=video.out(0), run_dir=run_dir,
                                 segment_index=seg.get("segment_index", i),
                                 storyboard_data=storyboard_data,
-                                per_queue=max(1, int(segments_per_queue)) if resume else 0)
+                                per_queue=max(1, int(segments_per_queue)) if resume else 0,
+                                last_frame=handoff.out(0))
             if chain is not None:
                 saver_kwargs["after"] = chain.out(0)
             chain = graph.node("SegmentVideoSaver", id=f"save{i}", **saver_kwargs)
@@ -5909,6 +6121,18 @@ class MiniMaxSegmentsRender(ForceRerunMixin):
                                "folder, so queueing again continues the song instead of "
                                "starting over.",
                 }),
+                "seamless_chain": ("BOOLEAN", {
+                    "default": True,
+                    "label_on": "start each clip on the previous clip's real last frame",
+                    "label_off": "start each clip on its card",
+                    "tooltip": "ON: segment i+1 begins from the exact frame segment i's "
+                               "clip ends on (saved beside the clip, so it also works "
+                               "across queues), while its card stays the target the clip "
+                               "moves toward - boundaries become seamless: 1-2, 2-3, 3-4 "
+                               "flow as one take. OFF: every segment starts on its card "
+                               "image; the previous clip only ends NEAR that card, so "
+                               "each boundary shows a small jump.",
+                }),
             }
         }
 
@@ -5929,7 +6153,7 @@ class MiniMaxSegmentsRender(ForceRerunMixin):
     def render_segments(self, force_rerun, model, clip, video_vae, audio_vae, images,
                         animation_prompts, storyboard_data, run_dir, width, height, fps,
                         seed, steps, sampler_name, scheduler, max_segments=999,
-                        segments_per_queue=4, resume=True):
+                        segments_per_queue=4, resume=True, seamless_chain=True):
         from comfy_execution.graph_utils import GraphBuilder
 
         _stage_cleanup("MiniMaxSegmentsRender")
@@ -5977,15 +6201,24 @@ class MiniMaxSegmentsRender(ForceRerunMixin):
                 " to redo all of them, switch 'resume' to 're-render every segment'.",
                 "=" * 78])
             _safe_print(done)
-            return {"ui": {"text": (done,)}, "result": ("all segments already rendered",
-                                                        done, 0)}
+            # Still send the board: finishing a song must not blank the table.
+            finished = {"kind": "plan", "engine": "MiniMax H3",
+                        "run": os.path.basename(run_dir or ""),
+                        "total": len(wanted), "batch": 0, "done": len(already),
+                        "remaining": 0,
+                        "rows": _board_rows(wanted, prompts, run_dir, fps=fps, deck=deck,
+                                            budget=VIDEO_PROMPT_BUDGETS["MiniMax H3"],
+                                            frames_fn=_minimax_frames)}
+            return {"ui": {"text": (done,), "gap_board": (json.dumps(finished),)},
+                    "result": ("all segments already rendered", done, 0)}
 
         graph = GraphBuilder()
         sampler = graph.node("KSamplerSelect", id="samp", sampler_name=sampler_name)
         sigmas = graph.node("BasicScheduler", id="sig", model=model, scheduler=scheduler,
                             steps=steps, denoise=1.0)
 
-        plan_rows, chain, trimmed_count = [], None, 0
+        plan_rows, chain, trimmed_count, first_banner = [], None, 0, None
+        prev_handoff, prev_i = None, None
         # `i` is the segment's index in the SONG, not in this batch, so cards,
         # seeds and clip numbers do not shift when the song is split up.
         for i, seg in batch:
@@ -5999,11 +6232,24 @@ class MiniMaxSegmentsRender(ForceRerunMixin):
             if len(prompt) < raw_len:
                 trimmed_count += 1
 
-            # CONTINUITY: consecutive segments SHARE a card - segment i ends on
-            # card i+1 and segment i+1 opens on that same card - so every cut
-            # lands on a frame both clips have in common.
+            # CONTINUITY. Same seamless chaining as the LTX renderer: the next
+            # segment starts from the previous clip's REAL final frame (node
+            # output within this queue, handoff PNG across queues); its card
+            # stays the last-frame target the clip moves toward.
             start_src = images[a:a + 1]
             start_desc = f"card {a}" + (f" (shared with segment {i})" if i > 0 else "")
+            if seamless_chain and i > 0:
+                if prev_handoff is not None and prev_i == i - 1:
+                    start_src = prev_handoff.out(0)
+                    start_desc = (f"segment {i}'s actual final frame "
+                                  f"(seamless chain, card {a} as reference)")
+                else:
+                    prev_seg_idx = int(wanted[i - 1].get("segment_index", i - 1))
+                    loaded = _load_handoff(run_dir, prev_seg_idx)
+                    if loaded is not None:
+                        start_src = loaded
+                        start_desc = (f"segment {i}'s final frame from disk "
+                                      f"(seamless chain, card {a} as reference)")
 
             banner_text = (
                 "=" * 62 + "\n"
@@ -6019,10 +6265,13 @@ class MiniMaxSegmentsRender(ForceRerunMixin):
                 + "\n".join("   " + ln for ln in _wrap(prompt, 56, 0).split("\n")) + "\n"
                 + "=" * 62)
             banner_kwargs = dict(start_image=start_src, end_image=images[b:b + 1],
-                                 info=banner_text)
+                                 info=banner_text,
+                                 board=json.dumps({"kind": "now", "i": i}))
             if chain is not None:
                 banner_kwargs["after"] = chain.out(0)
             banner = graph.node("SegmentNowRendering", id=f"now{i}", **banner_kwargs)
+            if first_banner is None:
+                first_banner = banner
 
             first = graph.node("ImageScale", id=f"sA{i}", image=banner.out(0),
                                upscale_method="lanczos", width=width, height=height,
@@ -6057,10 +6306,19 @@ class MiniMaxSegmentsRender(ForceRerunMixin):
                                images=frames_out.out(0), audio=audio_out.out(0),
                                fps=float(fps))
 
+            # The frame the NEXT segment starts from - the last one that
+            # survives the stitcher's trim, so continuity holds in the final cut.
+            handoff_idx = max(0, min(frames - 1, int(duration * fps + 1e-6) - 1))
+            handoff = graph.node("ImageFromBatch", id=f"hand{i}",
+                                 image=frames_out.out(0),
+                                 batch_index=handoff_idx, length=1)
+            prev_handoff, prev_i = handoff, i
+
             saver_kwargs = dict(force_rerun=False, video=video.out(0), run_dir=run_dir,
                                 segment_index=seg.get("segment_index", i),
                                 storyboard_data=storyboard_data,
-                                per_queue=max(1, int(segments_per_queue)) if resume else 0)
+                                per_queue=max(1, int(segments_per_queue)) if resume else 0,
+                                last_frame=handoff.out(0))
             if chain is not None:
                 saver_kwargs["after"] = chain.out(0)
             chain = graph.node("SegmentVideoSaver", id=f"save{i}", **saver_kwargs)
@@ -6102,7 +6360,40 @@ class MiniMaxSegmentsRender(ForceRerunMixin):
         plan += "\n" + bar
         _safe_print(plan)
 
-        return {"ui": {"text": (plan,)},
+        # Load and show every first/last frame BEFORE anything renders (same
+        # pattern as the LTX renderer): batched in order and made a
+        # prerequisite of the first banner, so the whole set is on screen
+        # while stopping the queue still costs nothing.
+        pair_preview, held, pair_count = None, None, 0
+        for i, seg in batch:
+            a = min(i, deck - 1)
+            b = min(i + 1, deck - 1)
+            for frame in (images[a:a + 1], images[b:b + 1]):
+                if pair_preview is None and held is None:
+                    held = frame
+                elif pair_preview is None:
+                    pair_preview = graph.node("ImageBatch", id=f"pair{pair_count}",
+                                              image1=held, image2=frame)
+                    held = None
+                    pair_count += 1
+                else:
+                    pair_preview = graph.node("ImageBatch", id=f"pair{pair_count}",
+                                              image1=pair_preview.out(0), image2=frame)
+                    pair_count += 1
+        if pair_preview is not None and first_banner is not None:
+            graph.node("PreviewImage", id="pairs_all", images=pair_preview.out(0))
+            first_banner.set_input("frames_ready", pair_preview.out(0))
+
+        board = {"kind": "plan", "engine": "MiniMax H3",
+                 "run": os.path.basename(run_dir or ""),
+                 "total": len(wanted), "batch": len(batch),
+                 "done": len(already), "remaining": remaining_after,
+                 "rows": _board_rows(wanted, prompts, run_dir, fps=fps, deck=deck,
+                                     queued={i for i, _ in batch},
+                                     budget=VIDEO_PROMPT_BUDGETS["MiniMax H3"],
+                                     frames_fn=_minimax_frames)}
+
+        return {"ui": {"text": (plan,), "gap_board": (json.dumps(board),)},
                 "expand": graph.finalize(),
                 "result": (chain.out(0), plan, len(batch))}
 
@@ -6136,6 +6427,10 @@ class SegmentVideoSaver(ForceRerunMixin):
                 # How many segments each queue renders, so the advice below can
                 # say how many QUEUES remain instead of a misleading number.
                 "per_queue": ("INT", {"forceInput": True}),
+                # The clip's true final frame; saved next to the clip so the
+                # NEXT segment can start from it (seamless chaining), even when
+                # that segment renders in a later queue.
+                "last_frame": ("IMAGE", ),
             }
         }
 
@@ -6146,7 +6441,7 @@ class SegmentVideoSaver(ForceRerunMixin):
     CATEGORY = "Geekatplay/VideoClipMaker"
 
     def save_segment(self, video, run_dir, segment_index, storyboard_data=None,
-                     force_rerun=False, after=None, per_queue=0):
+                     force_rerun=False, after=None, per_queue=0, last_frame=None):
         fallback = folder_paths.get_output_directory() if folder_paths else "."
         target_dir = run_dir if (run_dir and os.path.isdir(run_dir)) else fallback
         clips_dir = os.path.join(target_dir, "clips")
@@ -6168,6 +6463,18 @@ class SegmentVideoSaver(ForceRerunMixin):
             report = f"Could not write clip {idx}: {exc}"
             _safe_print(f"[SegmentVideoSaver] {report}")
             return {"ui": {"text": (report,)}, "result": ("", video, report)}
+
+        # The clip's true final frame, kept next to it so the NEXT segment can
+        # start from exactly this image - across queues, not just within one.
+        if last_frame is not None:
+            try:
+                from PIL import Image
+                arr = (last_frame[0].detach().cpu().numpy() * 255.0)
+                Image.fromarray(arr.clip(0, 255).astype("uint8")).save(
+                    os.path.join(clips_dir, f"handoff_{idx:03d}.png"))
+            except Exception as exc:
+                _safe_print(f"[SegmentVideoSaver] Could not save the handoff frame "
+                            f"for segment {idx}: {exc}")
 
         total = 0
         if storyboard_data:

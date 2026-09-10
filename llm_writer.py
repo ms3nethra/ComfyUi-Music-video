@@ -293,6 +293,12 @@ Required shape:
               wardrobe, colours. One sentence.",
   "setting": "the world every shot lives in: place, era, time of day, weather.
               One sentence.",
+  "style": "the visual STYLE of the whole video, derived from how the song
+            SOUNDS - its genre, tempo, energy and mode - not from the lyrics.
+            Name something concrete: a cinematography school, film stock, art
+            movement or named aesthetic (e.g. 'neon-noir anamorphic', 'grainy
+            16mm folk documentary', 'baroque oil-painting chiaroscuro'). One
+            sentence.",
   "palette": "the colour and light treatment for the whole video. One phrase.",
   "mood": "one or two words",
   "recurring_imagery": ["3 to 5 concrete visual motifs drawn from the lyrics"],
@@ -321,12 +327,21 @@ def _approach_note(approach):
     """The user's chosen prompt approach, as a directive both stages obey."""
     a = str(approach or "")
     if a.startswith("Abstract"):
-        return ("APPROACH: Abstract. Every card is a non-representational image - "
-                "colour fields, bold shapes, gesture and motion energy standing in "
-                "for the music. No people, no faces, no recognisable places or "
-                "objects; a lyric may only surface as a half-formed echo. The "
-                "character reference then describes a recurring FORM or colour "
-                "motif, not a person.")
+        return ("APPROACH: Abstract - as a real abstract PAINTING, not a vague blur. "
+                "First choose ONE art movement that matches how this song sounds - "
+                "e.g. analytic cubism (Picasso, Braque) for fractured driving rhythm, "
+                "Kandinsky's dynamic abstraction for bright kinetic energy, Rothko "
+                "colour-fields for slow ache, Pollock action painting for aggression, "
+                "Miro's playful biomorphs for pop, Malevich suprematism for cold "
+                "minimalism. Name that movement and its painters IN EVERY card prompt "
+                "and keep the whole video inside it. Each card is a non-figurative "
+                "composition in that movement: its forms, its palette logic, its "
+                "surface (impasto, stained canvas, flat planes). No people, no faces, "
+                "no recognisable places or objects, no photographic realism; a lyric "
+                "may only surface as a shape half-hidden in the abstraction. Loud "
+                "segments = dense saturated full-frame compositions; quiet ones = "
+                "sparse and breathing. The character reference describes the "
+                "recurring FORM or colour motif, not a person.")
     if a.startswith("Lyrics"):
         return ("APPROACH: Lyrics-focused. Each shot literally shows what that "
                 "segment's own words are about - stay close to the sung line, "
@@ -358,23 +373,39 @@ def _song_brief(data, max_segments=60):
     if music:
         lines.append(
             "SOUND: {tempo} BPM, {key} {mode}, energy {energy}, "
-            "brightness {bright} Hz, mood '{emo}', suggested look '{look}'.".format(
+            "brightness {bright} Hz, percussive {perc}, mood '{emo}' "
+            "(arousal {ar}, valence {va}), suggested look '{look}'.".format(
                 tempo=music.get("tempo", "?"), key=music.get("key", "?"),
                 mode=music.get("mode", "?"), energy=music.get("energy", "?"),
                 bright=music.get("brightness_hz", "?"),
+                perc=music.get("percussive_ratio", "?"),
+                ar=music.get("arousal", "?"), va=music.get("valence", "?"),
                 emo=str(music.get("emotional_tone", "")).replace("_", " "),
                 look=str(music.get("look", "")).replace("_", " ")))
+        if music.get("palette"):
+            lines.append(f"PALETTE the sound suggests: {music['palette']}")
+        # The genre's visual world, as measured from the audio - the model
+        # grounds its style choice in this instead of free-associating.
+        try:
+            from .nodes import MUSIC_WORLDS
+            world = MUSIC_WORLDS.get(music.get("look", ""))
+            if world:
+                lines.append(f"GENRE WORLD the sound implies: {world}")
+        except Exception:
+            pass
         lines.append("")
 
-    lines.append(f"TIMELINE: {len(segments)} segments.")
+    lines.append(f"TIMELINE: {len(segments)} segments. "
+                 "(energy 0..1 is that segment's loudness relative to the song's peak)")
     for seg in segments[:max_segments]:
         lyric = seg.get("lyrics") or "(instrumental)"
         lines.append(
-            "  [{idx:03d}] {start:6.2f}-{end:6.2f}s  {section:<18} {lyric}".format(
+            "  [{idx:03d}] {start:6.2f}-{end:6.2f}s  {section:<18} e={energy:<5} {lyric}".format(
                 idx=seg.get("segment_index", 0),
                 start=float(seg.get("start_time", 0.0)),
                 end=float(seg.get("end_time", 0.0)),
                 section=str(seg.get("section_label", "") or "-")[:18],
+                energy=str(seg.get("local_energy", "-")),
                 lyric=_clean(lyric, 160)))
     if len(segments) > max_segments:
         lines.append(f"  ... {len(segments) - max_segments} more segments")
@@ -421,6 +452,7 @@ def _validate_stage_a(obj):
     return {
         "subject": subject,
         "setting": setting,
+        "style": _clean(obj.get("style"), 300),
         "palette": _clean(obj.get("palette"), 300),
         "mood": _clean(obj.get("mood"), 80),
         "recurring_imagery": [_clean(x, 120) for x in (obj.get("recurring_imagery") or [])
@@ -469,10 +501,14 @@ def _plan_summary(plan):
     return (f"PLAN\n"
             f"  subject : {plan['subject']}\n"
             f"  setting : {plan['setting']}\n"
+            f"  style   : {plan.get('style') or '(director then picks per shot)'}\n"
             f"  palette : {plan['palette']}\n"
             f"  mood    : {plan['mood']}\n"
             f"  motifs  : {imagery}\n"
-            f"REFERENCES\n{ref_lines}")
+            f"REFERENCES\n{ref_lines}\n"
+            f"Write the plan's style into EVERY card prompt so the whole deck "
+            f"renders as one film, and vary the shot size and angle from card "
+            f"to card so no two neighbouring cards are framed alike.")
 
 
 def _batch_brief(segments):

@@ -1,8 +1,8 @@
 {
   "id": "44444444-4444-4444-8444-444444444444",
   "revision": 1,
-  "last_node_id": 33,
-  "last_link_id": 55,
+  "last_node_id": 34,
+  "last_link_id": 58,
   "nodes": [
     {
       "id": 1,
@@ -284,7 +284,8 @@
           "links": [
             7,
             41,
-            51
+            51,
+            58
           ]
         },
         {
@@ -415,7 +416,8 @@
             19,
             32,
             43,
-            50
+            50,
+            57
           ]
         },
         {
@@ -435,7 +437,8 @@
             34,
             42,
             49,
-            55
+            55,
+            56
           ]
         }
       ],
@@ -1366,6 +1369,7 @@
         999,
         18,
         4,
+        true,
         true
       ],
       "title": "9. RENDER ALL SEGMENTS  (4 per queue, resumable)",
@@ -1613,6 +1617,63 @@
       },
       "widgets_values": [],
       "title": "REFERENCE PROMPTS - which JSON + the exact prompt for every reference"
+    },
+    {
+      "id": 34,
+      "type": "SegmentTable",
+      "pos": [
+        1680,
+        1540
+      ],
+      "size": [
+        560,
+        460
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "storyboard_data",
+          "type": "STRING",
+          "link": 56
+        },
+        {
+          "name": "run_dir",
+          "type": "STRING",
+          "link": 57
+        },
+        {
+          "name": "animation_prompts",
+          "type": "STRING",
+          "link": 58
+        }
+      ],
+      "outputs": [
+        {
+          "name": "TABLE",
+          "type": "STRING",
+          "links": []
+        },
+        {
+          "name": "RENDERED",
+          "type": "INT",
+          "links": []
+        },
+        {
+          "name": "TOTAL",
+          "type": "INT",
+          "links": []
+        }
+      ],
+      "title": "3d. SEGMENT TABLE - all segments, frames, clips",
+      "properties": {
+        "Node name for S&R": "SegmentTable"
+      },
+      "widgets_values": [
+        false,
+        24
+      ]
     }
   ],
   "links": [
@@ -2054,6 +2115,30 @@
       3,
       15,
       4,
+      "STRING"
+    ],
+    [
+      56,
+      9,
+      3,
+      34,
+      0,
+      "STRING"
+    ],
+    [
+      57,
+      9,
+      1,
+      34,
+      1,
+      "STRING"
+    ],
+    [
+      58,
+      7,
+      1,
+      34,
+      2,
       "STRING"
     ]
   ],
